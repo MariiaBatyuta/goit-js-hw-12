@@ -1,0 +1,56 @@
+.input-wrap,
+.button-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 36px;
+}
+
+.input-string {
+    max-height: 272px;
+    max-height: 40px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: #808080;
+    margin-right: 8px;
+
+    font-size: 16px;
+    padding: 8px 16px;
+}
+
+.input-string:hover,
+.input-string:focus {
+    border: 1px solid #000000;
+}
+
+.input-string:active {
+    border-color: #4E75FF;
+    color: #2E2F42;
+    ;
+}
+
+.submitBtn,
+.button-more{
+    max-width: 120px;
+    max-height: 40px;
+    padding: 8px 16px;
+    background-color: #4E75FF;
+    color: #fff;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    gap: 10px;
+}
+
+.submitBtn:hover,
+.submitBtn:focus,
+.button-more:hover,
+.button-more:focus {
+    background-color: #6C8CFF;
+}
+
+.is-hiden {
+    display: none;
+}
+
