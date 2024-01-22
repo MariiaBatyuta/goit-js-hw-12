@@ -12,12 +12,13 @@ const loadMore = document.querySelector('.button-more');
 const morePhotoLoader = document.getElementById('more-photo-loader');
 
 let inputValue = '';
-const onInput = (e) => { inputValue = e.target.value; };
-input.addEventListener('input', onInput);
+const handleInput = (e) => { inputValue = e.target.value; };
+input.addEventListener('input', handleInput);
 
 const lightbox = new SimpleLightbox('.gallery-image-lightbox', {
     captions: true, captionPosition: 'bottom', captionsData: 'alt', close: true, loop: true, enableKeyboard: true, slideSpeed: 400, 
 });
+
 
 const api = axios.create({
     baseURL: 'https://pixabay.com/api/', 
@@ -29,7 +30,7 @@ const api = axios.create({
     }
 })
 
-const getPhoto = async (params) => {
+const getPhotos = async (params) => {
     try {
         const response = await api.get('', { params });
         
@@ -39,41 +40,51 @@ const getPhoto = async (params) => {
     }
 };
 
-const fetchPhotos = (q) => {
-    let page = 1; 
-    let isLastPage = false;
-    const per_page = 40;
+const initializePhotoFetching = (q) => {
+    const state = {
+        page: 1,
+        isLastPage: false,
+        per_page: 40,
+    };
 
     return async () => {
         try {
-            const { hits, total } = await getPhoto({ q, page, per_page });
+            const { hits, total } = await getPhotos({ q, page: state.page, per_page: state.per_page });
             
-            if (total < per_page) {
+
+            if (total === 0) {
                 iziToast.info({ title: 'Error', message: 'Sorry, there are no images matching your search query. Please try again!' });
                 input.value = '';
                 photoLoader.classList.remove('loader');
-                loadMore.style.display = 'none';
+                loadMore.classList.add('is-hidden');
                 return;
-            } 
-            if (isLastPage) return iziToast.info({ message: "We're sorry, but you've reached the end of search results." });
+            }
 
+            state.isLastPage = state.page >= Math.ceil(total / state.per_page);
+            state.page += 1;
 
-            if (page >= Math.floor(total / per_page)) isLastPage = true;
-            page += 1;
+            if (state.isLastPage) {
+                iziToast.info({ message: "We're sorry, but you've reached the end of search results." });
+                loadMore.style.display = 'none';
+                loadMore.removeEventListener('click', morePhotoLoadClick);
+            } else {
+                loadMore.style.display = 'block';
+            }
+
             return hits;
         } catch (error) {
             iziToast.error({ title: 'Error', message: 'Error fetching or processing photos' });
-        } 
-    }  
-}
+        }
+    };
+};
 
 const renderPhoto = async (uploadPhoto) => {
     const photo = await uploadPhoto();
     const imagePromises = photo.map(img => loadImage(img.webformatURL));
 
     await Promise.all(imagePromises);
+    
     renderMarkup(photo);
-    loadMore.style.display = 'block';
 
     const firstGalleryItem = gallery.querySelector('.gallery-item');
     if (firstGalleryItem) {
@@ -84,20 +95,29 @@ const renderPhoto = async (uploadPhoto) => {
             behavior: 'smooth',
         });
     }
-}
+    
+};
 
 let fetchPhotosFunc = null;
 
-const submitPhotos = async (e) => {
+const submitPhotosForm = async (e) => {
     e.preventDefault();
-    
-    if (fetchPhotosFunc !== null) loadMore.removeEventListener('click', fetchPhotosFunc);
+
+    if (fetchPhotosFunc !== null) {
+        loadMore.removeEventListener('click', morePhotoLoadClick);
+        fetchPhotosFunc = null;
+    }
+
     gallery.innerHTML = '';
     loadMore.style.display = 'none';
 
-    if (inputValue.trim() === '') return iziToast.error({ title: 'Error', message: 'Please, type a search query' });
-    
-    fetchPhotosFunc = fetchPhotos(inputValue);
+    if (inputValue.trim() === '') {
+        iziToast.error({ title: 'Error', message: 'Please, type a search query' })
+        return
+    }
+
+    const newFetchPhotosFunc = initializePhotoFetching(inputValue);
+    fetchPhotosFunc = newFetchPhotosFunc;
 
     // render photo
     try {
@@ -108,30 +128,42 @@ const submitPhotos = async (e) => {
     } finally {
         photoLoader.classList.remove('loader');
         morePhotoLoader.classList.remove('loader');
-        loadMore.classList.remove('is-hiden');
+        loadMore.classList.remove('is-hidden');
+
+        loadMore.addEventListener('click', morePhotoLoadClick);
+        
     }
     // load more
-    loadMore.addEventListener('click', async () => {
-        try {
-            morePhotoLoader.classList.add('loader');
-            await renderPhoto(fetchPhotosFunc);
-        } catch (error) {
-            iziToast.error({ title: 'Error', message: 'Error fetching or processing photos' });
-        }finally {
-            photoLoader.classList.remove('loader');
-            morePhotoLoader.classList.remove('loader');
-            loadMore.classList.remove('is-hiden');
-        }
-    });
+    loadMore.addEventListener('click', morePhotoLoadClick);
 
     input.value = '';
     lightbox.refresh();
+};
+loadMore.classList.add('is-hidden');
+form.addEventListener('submit', submitPhotosForm);
+
+async function morePhotoLoadClick() {
+    try {
+        morePhotoLoader.classList.add('loader');
+        await renderPhoto(fetchPhotosFunc);
+    } catch (error) {
+        iziToast.error({ title: 'Error', message: 'Error fetching or processing photos' });
+    } finally {
+        photoLoader.classList.remove('loader');
+        morePhotoLoader.classList.remove('loader');
+        loadMore.classList.remove('is-hidden');
+    }
+    if (fetchPhotosFunc && fetchPhotosFunc.isLastPage) {
+            console.log('Reached before hiding button'); 
+            loadMore.classList.add('is-hidden');
+        } else {
+            loadMore.classList.remove('is-hidden');
+        }
 }
-form.addEventListener('submit', submitPhotos);
 
 
 function renderMarkup (img = []) {
-    const marcup = img.reduce((html, {largeImageURL, webformatURL, tags, likes, views, comments, downloads }) => html + `
+    const markup = img.reduce((html, {largeImageURL, webformatURL, tags, likes, views, comments, downloads }) => html + `
             <li class="gallery-item">
                 <a href="${largeImageURL}" class="gallery-image-lightbox">
                     <img class="gallery-image"
@@ -146,8 +178,8 @@ function renderMarkup (img = []) {
                     <p class="item-info"><b>Dowloads</b><br>${downloads}</p>
                 </div>
             </li>`, '');
-    gallery.insertAdjacentHTML('beforeend', marcup);
-}
+    gallery.insertAdjacentHTML('beforeend', markup);
+};
 
 function loadImage(url) {
     return new Promise((resolve, reject) => {
@@ -156,4 +188,4 @@ function loadImage(url) {
         image.onerror = reject;
         image.src = url;
     });
-}
+};
